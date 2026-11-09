@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+
+
+
+<html lang="zh-CN">
+
+
+
+<head>
+
+
+
+    <meta charset="UTF-8">
+
+
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+    <title>网盘搜索</title>
+
+
+
+    <link rel="stylesheet" href="index.css?v=2">
+
+
+
+    <script src="./public/config.js"></script>
+    <script src="./public/reportvisit_stats.js"></script>
+
+
+
+</head>
+
+
+
+<body>
+
+
+
+    <h1>网盘资源搜索</h1>
+
+
+
+    
+
+
+
+    <!-- 搜索区域 -->
+
+
+
+    <div class="search-container">
+
+
+
+        <div class="search-box">
+
+
+
+            <input type="text" id="keyword" placeholder="输入关键词">
+
+
+
+        </div>
+
+
+
+        <div class="engine-buttons">
+
+
+
+            <!-- 
+
+
+
+            以后扩展功能，请在 backend/ 目录下创建对应的 PHP API 文件：
+
+
+
+            - local_search.php  (本地数据库搜索)
+
+
+
+            - engine1_api.php   (引擎1)
+
+
+
+            - engine2_api.php   (引擎2)
+
+
+
+            - engine3_api.php   (引擎3)
+
+
+
+            
+
+
+
+            取消以下注释即可启用：
+
+
+
+            -->
+
+
+
+            <button class="engine-btn active" onclick="search('hy_api.php', 1)">搜索</button>
+
+
+
+            <button class="engine-btn" onclick="search('ptger_api.php', 1)">资源</button>
+
+
+
+            <button class="engine-btn" onclick="search('local_api.php', 1)">本地</button>
+
+
+
+            <button class="engine-btn" onclick="search('kuleu_api.php', 1)">短剧</button>
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+    
+
+
+
+    <!-- 搜索结果 -->
+
+
+
+    <div id="tableResult"></div>
+
+
+
+    
+
+
+
+    <!-- 分页 -->
+
+
+
+    <div class="pagination" id="pagination" style="display: none;">
+
+
+
+        <button onclick="search(null, currentPage - 1)">上一页</button>
+
+
+
+        <span id="pageInfo" style="margin: 0 15px; font-size: 16px; color: #666;"></span>
+
+
+
+        <button onclick="search(null, currentPage + 1)">下一页</button>
+
+
+
+    </div>
+
+
+
+
+
+
+
+    <script>
+
+
+
+        let currentApi = 'hy_api.php';
+
+
+
+        let currentPage = 1;
+
+
+
+        let currentKeyword = '';
+
+
+
+        let lastData = null;
+
+
+
+
+
+
+
+        async function search(api, page) {
+
+
+
+            currentApi = api || currentApi;
+
+
+
+            currentPage = page || currentPage;
+
+
+
+            
+
+
+
+            currentKeyword = document.getElementById('keyword').value.trim();
+
+
+
+            const resultDiv = document.getElementById('tableResult');
+
+
+
+            const paginationDiv = document.getElementById('pagination');
+
+
+
+            const pageInfo = document.getElementById('pageInfo');
+
+
+
+            // 空关键词直接拦截：不发起请求
+
+            // 原因1：后端 local_api.php 用的是 LIKE '%%'，空词会返回整个资源库，用户看到全部资源
+
+            // 原因2：将来 search_logs 会记录每次搜索，空词会被当成真实需求，污染统计
+
+            // 注意：这里只拦前端，后端 local_api.php 的 '测试' 默认值仍在（直接调接口才会触发，优先级低）
+
+            if (!currentKeyword) {
+
+                resultDiv.innerHTML = '<p style="text-align:center;color:#999;padding:40px;">请输入关键词</p>';
+
+                paginationDiv.style.display = 'none';
+
+                return;
+
+            }
+
+
+
+            
+
+
+
+            resultDiv.innerHTML = '<p style="text-align:center;color:#999;padding:40px;">加载中...</p>';
+
+
+
+            paginationDiv.style.display = 'none';
+
+
+
+            
+
+
+
+            const apiUrl = `${CONFIG.BASE_URL}/searchapi/${currentApi}?q=${encodeURIComponent(currentKeyword)}&page=${currentPage}`;
+
+
+
+            
+
+
+
+            try {
+
+
+
+                const response = await fetch(apiUrl);
+
+
+
+                const data = await response.json();
+
+
+
+                
+
+
+
+                lastData = data;
+
+
+
+                const list = data.data?.list || [];
+
+
+
+                
+
+
+
+                if (list.length > 0) {
+
+
+
+                    let html = '';
+
+
+
+                    list.forEach(item => {
+
+
+
+                        html += `
+
+
+
+                            <div class="result-item">
+
+
+
+                                <a href="abcd.html" class="result-title" target="_blank" onclick="saveUrl('${item.url}')">${item.title}</a>
+
+
+
+                                <div class="result-meta">${item.disk_type} | ${item.size} | ${item.update_time}</div>
+
+
+
+                                <div class="result-meta">分享者：${item.share_user}</div>
+
+
+
+                                <div class="result-tags">
+
+
+
+                                    ${item.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+
+
+
+                                </div>
+
+
+
+                                <a href="abcd.html" class="download-btn" target="_blank" onclick="saveUrl('${item.url}')">前往下载</a>
+
+
+
+                            </div>
+
+
+
+                        `;
+
+
+
+                    });
+
+
+
+                    resultDiv.innerHTML = html;
+
+
+
+                    
+
+
+
+                    paginationDiv.style.display = 'flex';
+
+
+
+                    pageInfo.textContent = `第 ${currentPage} 页 / 共 ${data.data.total_page} 页`;
+
+
+
+                    
+
+
+
+                    // 更新按钮状态
+
+
+
+                    updateActiveButton(currentApi);
+
+
+
+                } else {
+
+
+
+                    resultDiv.innerHTML = '<p style="text-align:center;color:#999;padding:40px;">没有找到相关资源</p>';
+
+
+
+                    paginationDiv.style.display = 'none';
+
+
+
+                }
+
+
+
+            } catch (error) {
+
+
+
+                resultDiv.innerHTML = `<p style="text-align:center;color:#f00;padding:40px;">请求失败：${error.message}</p>`;
+
+
+
+                paginationDiv.style.display = 'none';
+
+
+
+            }
+
+
+
+        }
+
+
+
+
+
+
+
+        function updateActiveButton(api) {
+
+
+
+            document.querySelectorAll('.engine-btn').forEach(btn => {
+
+
+
+                btn.classList.remove('active');
+
+
+
+                if (btn.getAttribute('onclick').includes(api)) {
+
+
+
+                    btn.classList.add('active');
+
+
+
+                }
+
+
+
+            });
+
+
+
+        }
+
+
+
+
+
+
+
+        function saveUrl(url) {
+
+
+
+            localStorage.setItem('downloadUrl', url);
+
+
+
+            // 记录本次搜索词，abcd.html 打开后据此请求推荐商品
+
+            localStorage.setItem('searchKeyword', currentKeyword);
+
+
+
+        }
+
+
+
+
+
+
+
+        document.getElementById('keyword').addEventListener('keypress', function(e) {
+
+
+
+            if (e.key === 'Enter') {
+
+
+
+                search(currentApi, 1);
+
+
+
+            }
+
+
+
+        });
+
+
+
+        
+
+        reportVisit('搜索网站');
+
+
+    </script>
+
+
+
+</body>
+
+
+
+</html>
